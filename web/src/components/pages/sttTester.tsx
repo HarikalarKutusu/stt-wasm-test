@@ -1,6 +1,9 @@
 // REACT
 import { useEffect, useRef, useState } from "react";
 
+// MUI
+import MicIcon from "@mui/icons-material/Mic";
+
 // Coqui STT Wasm
 // import { STT } from "./../../assets/js/stt_wasm";
 // import {  } from "stt-wasm"
@@ -11,9 +14,12 @@ const DOWNSAMPLING_WORKER = "/downsampling.worker.js";
 const STT_WORKER = "/stt.worker.js";
 
 const sentences: string[] = [
-  "Hello, how are you?",
-  "My name is Josh, what's yours?",
-  "Hello world, said the program...",
+  // "Hello, how are you?",
+  // "My name is Josh, what's yours?",
+  // "Hello world, said the program...",
+  "Move pawn to alpha six",
+  "Bishop takes pawn",
+  "Pawn in echo four takes pawn",
 ];
 
 //--------------------------------------------------------------
@@ -54,9 +60,9 @@ const ClientAudio = (props: any) => {
   ) => {
     // debugSocketVoice && console.log("WA: Creating Audio Processor");
     if (aContext === undefined) console.log("audioContext NOT AVAILABLE");
-    let lProcessor = aContext.createScriptProcessor(4096, 1, 1);
-    if (!lProcessor) console.log("processor NOT AVAILABLE");
-    if (lProcessor) {
+    let _processor = aContext.createScriptProcessor(4096, 1, 1);
+    if (!_processor) console.log("processor NOT AVAILABLE");
+    if (_processor) {
       // debugSocketVoice && console.log("WA: Created Processor");
       const sampleRate = mStreamSource.context.sampleRate;
       const loc =
@@ -77,13 +83,13 @@ const ClientAudio = (props: any) => {
         //   socket.emit("stream-data", e.data.buffer);
         // }
       };
-      lProcessor.onaudioprocess = (event: AudioProcessingEvent) => {
+      _processor.onaudioprocess = (event: AudioProcessingEvent) => {
         var data = event.inputBuffer.getChannelData(0);
         downsampler.postMessage({ command: "process", inputFrame: data });
       };
-      lProcessor.connect(aContext.destination);
+      _processor.connect(aContext.destination);
     }
-    return lProcessor;
+    return _processor;
   };
   //
   // Function: startMicrophone
@@ -216,8 +222,13 @@ const ClientAudio = (props: any) => {
   };
 
   return (
-    <>MicIcon</>
-    // <MicrophoneIcon
+    // <>MicIcon</>
+    <MicIcon
+      color={recordingStatus ? "primary" : "secondary"}
+      onClick={handleMicrophoneClick}
+    />
+
+    // <MicIcon
     //   title={
     //     recordingStatus
     //       ? intl.get("ui.clientaudio.title.recording")
@@ -232,155 +243,33 @@ const ClientAudio = (props: any) => {
 }; // client audio
 
 //--------------------------------------------------------------
-// InferenceEngine Component
+// Sentence Tester
 //--------------------------------------------------------------
-const InferenceEngine = (params: any) => {
-  const testSet: TestResultType = params;
-  const lc: string = testSet.lc;
-
-  // TODO - Load async from remote
-  const modelFile: string = "/assets/models/" + lc + "/" + lc + ".tflite";
-  const scorerFile: string = "/assets/models/" + lc + "/" + lc + ".scorer";
-
-  // Init Worker
-  let audioContext: AudioContext;
-  const loc =
-    window.location.protocol +
-    "//" +
-    window.location.hostname +
-    ":" +
-    window.location.port;
-  var sttRuntimeWorker: Worker = new Worker(
-    new URL(loc + STT_WORKER, import.meta.url),
-  );
-  sttRuntimeWorker.onmessage = (e) => processWorkerResponses(e);
-
-  //
-  // Message Handler
-  //
-  const processWorkerResponses = (event: any) => {
-    if (!event || !event.data || !("name" in event.data)) {
-      console.log(`Ignoring malformed event`, event);
-      return;
-    }
-
-    switch (event.data.name) {
-      case "stt-initialized":
-        // Now that we know the WASM module is ready, we can load the model
-        loadModel(modelFile);
-        break;
-      case "stt-model-loaded":
-        // Create an audio context for future processing.
-        audioContext = new AudioContext({
-          // Use the model's sample rate so that the decoder will resample for us.
-          sampleRate: event.data.params.modelSampleRate,
-        });
-        loadScorer(scorerFile);
-        break;
-
-      //   case "stt-model-loaded":
-      //     {
-      //       // Create an audio context for future processing.
-      //       audioContext = new AudioContext({
-      //         // Use the model's sample rate so that the decoder will resample for us.
-      //         sampleRate: event.data.params.modelSampleRate,
-      //       });
-
-      //       const scorerInput = document.getElementById("scorerpicker");
-      //       scorerInput.addEventListener(
-      //         "change",
-      //         (e) => loadScorer(e.target.files[0]),
-      //         false,
-      //       );
-      //       scorerInput.disabled = false;
-
-      //       // Now that a model is available, enable opening the audio file.
-      //       const audioInput = document.getElementById("audiopicker");
-      //       audioInput.addEventListener(
-      //         "change",
-      //         (e) => processAudio(e.target.files[0]),
-      //         false,
-      //       );
-      //       audioInput.disabled = false;
-      //     }
-      //     break;
-
-      //   case "stt-done":
-      //     {
-      //       document.getElementById("result").textContent =
-      //         event.data.params.transcription;
-      //       document.getElementById("elapsedSeconds").textContent =
-      //         event.data.params.elapsedTime;
-      //     }
-      //     break;
-    }
-  };
-
-  const loadModel = (modelFile: any) => {
-    console.log(`Loading model`, modelFile);
-
-    let reader = new FileReader();
-    reader.onload = (e) => {
-      const modelData: Uint8Array = new Uint8Array(
-        reader.result as ArrayBuffer,
-      );
-      sttRuntimeWorker.postMessage(
-        {
-          name: "load-model",
-          params: {
-            modelData,
-          },
-        },
-        [modelData.buffer],
-      );
-    };
-    reader.readAsArrayBuffer(modelFile);
-  };
-
-  function loadScorer(scorerFile: any) {
-    console.log(`Loading scorer`, scorerFile);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const scorerData: Uint8Array = new Uint8Array(
-        reader.result as ArrayBuffer,
-      );
-      sttRuntimeWorker.postMessage(
-        {
-          name: "load-scorer",
-          params: {
-            scorerData,
-          },
-        },
-        [scorerData.buffer],
-      );
-    };
-    reader.readAsArrayBuffer(scorerFile);
-  }
-
-  const inference_worker = new Worker(STT_WORKER);
-
-  return <></>;
-};
-
 const SingleSentenceInference = (props: any) => {
-  const rec: TestResultType = props;
-
+  const rec = props.rec;
+  console.log(rec);
   return (
     <div>
       <h4>{rec.sentence}</h4>
       <ClientAudio />
-      <InferenceEngine testSet={rec} />
+      {/* <InferenceEngine testSet={rec} /> */}
     </div>
   );
 };
 
-const STTTester = (props: any) => {
-  const lc = props;
+interface ISTTTesterProps {
+  lc: string;
+}
+
+const STTTester = ({ lc }: ISTTTesterProps) => {
+  // status string
+  const [sttStatusText, setSttStatusText] = useState<string>("");
+  const [sttReady, setSttReady] = useState<boolean>(false);
+  const [sttError, setSttError] = useState<boolean>(false);
 
   // Prepare the test list with defaults (inc undefined yet ones, "" and -1 are used for them)
   const testSet: TestResultType[] = [];
-  sentences.map((s) => {
+  sentences.forEach((s) => {
     testSet.push({
       lc: lc,
       projectId: 0,
@@ -396,18 +285,138 @@ const STTTester = (props: any) => {
     });
   });
 
-  let i: number = 0;
+  let sttRuntimeWorkerRef = useRef<Worker>();
+
+  const modelFile: string = "/assets/models/" + lc + ".tflite";
+  const scorerFile: string = "/assets/models/" + lc + ".scorer";
+  const loc =
+    window.location.protocol +
+    "//" +
+    window.location.hostname +
+    ":" +
+    window.location.port;
+
+  //
+  // Loaders
+  //
+  const loadModel = (modelFN: string) => {
+    console.log("STT - Loading model: " + modelFN);
+
+    const res = fetch(modelFN).then((response) => {
+      if (!response.ok) {
+        console.log("STT - Error reading the model file!");
+        setSttStatusText("Error reading the model file: " + modelFN);
+        setSttError(true);
+      } else {
+        // return response.arrayBuffer();
+        response.arrayBuffer().then((modelData) =>
+          sttRuntimeWorkerRef.current?.postMessage(
+            {
+              name: "load-model",
+              params: {
+                modelData,
+              },
+            },
+            [modelData],
+          ),
+        );
+      }
+    });
+  };
+
+  const loadScorer = (scorerFN: any) => {
+    console.log(`STT - Loading scorer`, scorerFN);
+
+    const res = fetch(scorerFN).then((response) => {
+      if (!response.ok) {
+        console.log("STT - Error reading the scorer file!");
+        setSttStatusText("Error reading the scorer file: " + scorerFN);
+        setSttError(true);
+      } else {
+        // return response.arrayBuffer();
+        response.arrayBuffer().then((scorerData) =>
+          sttRuntimeWorkerRef.current?.postMessage(
+            {
+              name: "load-scorer",
+              params: {
+                scorerData,
+              },
+            },
+            [scorerData],
+          ),
+        );
+      }
+    });
+  };
+
+  //
+  // Message Handler
+  //
+  const processWorkerResponses = (event: any) => {
+    if (!event || !event.data || !("name" in event.data)) {
+      console.log(`Ignoring malformed event`, event);
+      return;
+    }
+
+    let audioContext: AudioContext;
+
+    switch (event.data.name) {
+      case "stt-initialized":
+        // Now that we know the WASM module is ready, we can load the model
+        console.log("STT - stt-initialized");
+        setSttStatusText("STT initialized, start loading model");
+        loadModel(modelFile);
+        break;
+      case "stt-model-loaded":
+        // Create an audio context for future processing.
+        console.log("STT - stt-model-loaded");
+        setSttStatusText("Model loaded, start loading scorer");
+        audioContext = new AudioContext({
+          // Use the model's sample rate so that the decoder will resample for us.
+          sampleRate: event.data.params.modelSampleRate,
+        });
+        loadScorer(scorerFile);
+        break;
+      case "stt-scorer-loaded":
+        // So we are ready
+        console.log("STT - stt-scorer-loaded");
+        setSttStatusText("Scorer loaded, STT is ready for inference.");
+        setSttReady(true);
+        break;
+      case "stt-done":
+        console.log("STT - stt-done");
+        console.log("TRANSCRIPTION: " + event.data.params.transcription);
+        console.log("ELAPSED TIME : " + event.data.params.elapsedTime);
+        break;
+    }
+  };
+
+  // Load InferenceEngine for the requested language
+  useEffect(() => {
+    if (!sttRuntimeWorkerRef.current) {
+      sttRuntimeWorkerRef.current = new Worker(
+        new URL(loc + STT_WORKER, import.meta.url),
+      );
+      sttRuntimeWorkerRef.current.onmessage = (e) => processWorkerResponses(e);
+    }
+  });
 
   return (
     <>
       <h3>Test For English Model</h3>
-      <p>
-        Press the microphone icon and speak the sentence aloud, then press it
-        again to stop.
-      </p>
-      {testSet.map((t) => (
-        <SingleSentenceInference key={i++} rec={t} />
-      ))}
+      {!sttReady ? (
+        <div>Initializing STT: {sttStatusText}</div>
+      ) : (
+        <>
+          <p>
+            Press the microphone icon and speak the sentence aloud, then press
+            it again to stop.
+          </p>
+          {testSet.map((t, index) => (
+            <SingleSentenceInference key={index} rec={t} />
+          ))}
+        </>
+      )}
     </>
   );
 };

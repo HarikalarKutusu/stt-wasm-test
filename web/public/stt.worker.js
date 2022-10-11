@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-undef
 importScripts(["lib/stt_wasm.js"]);
 
 const Lib = {
@@ -12,11 +13,10 @@ const Lib = {
 var activeModel;
 var stt;
 
+// eslint-disable-next-line no-undef
 STT(Lib).then((module) => {
   stt = module;
 });
-
-// stt = STT
 
 // https://stackoverflow.com/q/33738873/261698
 function converFloat32ToInt16(buffer) {
@@ -26,7 +26,7 @@ function converFloat32ToInt16(buffer) {
 function loadModel(modelData) {
   activeModel = new stt.Model(modelData);
   const modelSampleRate = activeModel.getSampleRate();
-  console.log(`Model sample rate: ${modelSampleRate}`);
+  console.log(`STT.WORKER - Model sample rate: ${modelSampleRate}`);
 
   postMessage({
     name: "stt-model-loaded",
@@ -38,7 +38,11 @@ function loadModel(modelData) {
 
 function loadScorer(scorerData) {
   activeModel.enableExternalScorer(scorerData);
-  console.log("Scorer loaded");
+  console.log("STT.WORKER - Scorer loaded");
+  postMessage({
+    name: "stt-scorer-loaded",
+    params: {},
+  });
 }
 
 function processAudio(audioBuffer) {
@@ -53,8 +57,8 @@ function processAudio(audioBuffer) {
   const result = activeModel.speechToText(toPass);
   const elapsedSeconds = (Date.now() - now) / 1000;
 
-  console.log(`Transcription: ${result}`);
-  console.log(`Elapsed: ${elapsedSeconds} seconds`);
+  console.log(`STT.WORKER - Transcription: ${result}`);
+  console.log(`STT.WORKER - Elapsed: ${elapsedSeconds} seconds`);
 
   postMessage({
     name: "stt-done",
@@ -72,18 +76,21 @@ function processWorkerRequests(event) {
     !event.data ||
     !("name" in event.data)
   ) {
-    console.error(`Malformed event submitted to worker ${event}`);
+    console.error(`STT.WORKER - Malformed event submitted to worker ${event}`);
     return;
   }
 
   switch (event.data.name) {
     case "load-model":
+      console.log("STT.WORKER - load-model");
       loadModel(event.data.params.modelData);
       break;
     case "load-scorer":
+      console.log("STT.WORKER - load-scorer");
       loadScorer(event.data.params.scorerData);
       break;
     case "process-audio":
+      console.log("STT.WORKER - process-audio");
       processAudio(event.data.params.audioBuffer);
       break;
     default:
