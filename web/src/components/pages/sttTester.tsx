@@ -266,6 +266,7 @@ const STTTester = ({ lc }: ISTTTesterProps) => {
   const [sttStatusText, setSttStatusText] = useState<string>("");
   const [sttReady, setSttReady] = useState<boolean>(false);
   const [sttError, setSttError] = useState<boolean>(false);
+  const [sampleRate, setSampleRate] = useState<number>(-1);
 
   // Prepare the test list with defaults (inc undefined yet ones, "" and -1 are used for them)
   const testSet: TestResultType[] = [];
@@ -362,26 +363,34 @@ const STTTester = ({ lc }: ISTTTesterProps) => {
 
     switch (event.data.name) {
       case "stt-initialized":
-        // Now that we know the WASM module is ready, we can load the model
-        console.log("STT - stt-initialized");
-        setSttStatusText("STT initialized, start loading model");
-        loadModel(modelFile);
+        if (!sttError) {
+          // Now that we know the WASM module is ready, we can load the model
+          console.log("STT - stt-initialized");
+          setSttStatusText("STT initialized, start loading model");
+          loadModel(modelFile);
+        }
         break;
       case "stt-model-loaded":
-        // Create an audio context for future processing.
-        console.log("STT - stt-model-loaded");
-        setSttStatusText("Model loaded, start loading scorer");
-        audioContext = new AudioContext({
-          // Use the model's sample rate so that the decoder will resample for us.
-          sampleRate: event.data.params.modelSampleRate,
-        });
-        loadScorer(scorerFile);
+        if (!sttError) {
+          // Create an audio context for future processing.
+          console.log("STT - stt-model-loaded");
+          setSttStatusText("Model loaded, start loading scorer");
+          setSampleRate(Number(event.data.params.modelSampleRate));
+          // TODO MOVE THIS
+          // audioContext = new AudioContext({
+          //   // Use the model's sample rate so that the decoder will resample for us.
+          //   sampleRate: event.data.params.modelSampleRate,
+          // });
+          loadScorer(scorerFile);
+        }
         break;
       case "stt-scorer-loaded":
-        // So we are ready
-        console.log("STT - stt-scorer-loaded");
-        setSttStatusText("Scorer loaded, STT is ready for inference.");
-        setSttReady(true);
+        if (!sttError) {
+          // So we are ready
+          console.log("STT - stt-scorer-loaded");
+          setSttStatusText("Scorer loaded, STT is ready for inference.");
+          setSttReady(true);
+        }
         break;
       case "stt-done":
         console.log("STT - stt-done");
